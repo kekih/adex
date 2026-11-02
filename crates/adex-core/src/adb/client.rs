@@ -6,7 +6,6 @@ use tokio::process::Command;
 use tracing::{debug, info};
 
 /// Thin async wrapper around the system `adb` binary.
-/// Later we can swap the backend for pure-Rust `rsadb`.
 #[derive(Debug, Clone)]
 pub struct AdbClient {
     adb_path: PathBuf,
@@ -84,7 +83,7 @@ impl AdbClient {
 
             devices.push(Device {
                 serial: serial.to_string(),
-                state: DeviceState::from_str(state_str),
+                state: DeviceState::parse(state_str),
                 product,
                 model,
                 device,
@@ -155,7 +154,6 @@ impl AdbClient {
         Ok(())
     }
 
-    /// Start a long-running process (used for scrcpy-server).
     pub async fn shell_exec(&self, serial: &str, cmd: &str) -> Result<tokio::process::Child> {
         info!(%serial, %cmd, "starting shell process");
         let child = Command::new(&self.adb_path)
@@ -165,11 +163,5 @@ impl AdbClient {
             .kill_on_drop(true)
             .spawn()?;
         Ok(child)
-    }
-}
-
-impl Default for AdbClient {
-    fn default() -> Self {
-        Self::new().expect("adb not found")
     }
 }

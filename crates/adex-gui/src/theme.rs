@@ -1,6 +1,6 @@
 //! Visual theme inspired by modern desktop / Android DeX style.
 
-use egui::{Color32, CornerRadius, Stroke, Visuals};
+use egui::{Color32, Stroke, Visuals};
 
 pub const BG_DARK: Color32 = Color32::from_rgb(18, 18, 24);
 pub const BG_PANEL: Color32 = Color32::from_rgb(28, 28, 36);
@@ -19,7 +19,6 @@ pub fn apply(ctx: &egui::Context) {
     let mut style = (*ctx.style()).clone();
     style.visuals = dark_visuals();
     style.spacing.item_spacing = egui::vec2(8.0, 6.0);
-    style.spacing.window_margin = egui::Margin::same(12);
     style.spacing.button_padding = egui::vec2(12.0, 6.0);
     ctx.set_style(style);
 }
@@ -38,11 +37,6 @@ fn dark_visuals() -> Visuals {
     v.selection.bg_fill = ACCENT.linear_multiply(0.35);
     v.selection.stroke = Stroke::new(1.0, ACCENT);
     v.window_stroke = Stroke::new(1.0, BORDER);
-    v.window_corner_radius = CornerRadius::same(10);
-    v.widgets.noninteractive.corner_radius = CornerRadius::same(6);
-    v.widgets.inactive.corner_radius = CornerRadius::same(6);
-    v.widgets.hovered.corner_radius = CornerRadius::same(6);
-    v.widgets.active.corner_radius = CornerRadius::same(6);
     v.override_text_color = Some(TEXT);
     v
 }
