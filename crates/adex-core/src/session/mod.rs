@@ -44,7 +44,9 @@ pub enum SessionEvent {
 /// Represents a live mirroring session.
 pub struct Session {
     pub device: Device,
+    #[allow(dead_code)]
     config: SessionConfig,
+    #[allow(dead_code)]
     adb: AdbClient,
     control_tx: Option<mpsc::Sender<ControlMessage>>,
 }
@@ -57,22 +59,18 @@ impl Session {
         let adb = AdbClient::new()?;
         let server = ScrcpyServer::new(adb.clone(), device.serial.clone());
 
-        // Push server
         server.push_server(&config.server_jar).await?;
 
-        // Start server process
         let _child = server
             .start(config.max_size, config.bit_rate, config.max_fps)
             .await?;
 
-        // Connect to the forwarded port
         let stream = TcpStream::connect("127.0.0.1:27183")
             .await
             .map_err(|e| Error::ServerStart(format!("failed to connect to server: {e}")))?;
 
         let (mut reader, mut writer) = stream.into_split();
 
-        // Read device meta (64-byte name + width + height)
         let mut meta_buf = [0u8; 64 + 8];
         reader
             .read_exact(&mut meta_buf)
@@ -99,7 +97,6 @@ impl Session {
             })
             .await;
 
-        // Video reader task
         let event_tx2 = event_tx.clone();
         tokio::spawn(async move {
             let mut header = [0u8; 12];
@@ -139,7 +136,6 @@ impl Session {
             }
         });
 
-        // Control writer task
         tokio::spawn(async move {
             while let Some(msg) = control_rx.recv().await {
                 let data = msg.encode();
