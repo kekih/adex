@@ -1,0 +1,28 @@
+[package]
+name = "adex-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core library for Adex: ADB, scrcpy protocol, session management and video pipeline"
+
+[dependencies]
+tokio = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+bytes = { workspace = true }
+serde = { workspace = true }
+bitflags = { workspace = true }
+bytemuck = { workspace = true }
+
+# Pure-Rust ADB client (preferred)
+rsadb = { version = "0.1", optional = true }
+
+# Fallback / helpers
+which = "7"
+
+[features]
+default = ["system-adb"]
+system-adb = []
+pure-adb = ["dep:rsadb"]

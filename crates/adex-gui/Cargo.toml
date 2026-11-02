@@ -1,0 +1,27 @@
+[package]
+name = "adex"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Adex — high-performance Android screen mirroring and desktop control"
+
+[[bin]]
+name = "adex"
+path = "src/main.rs"
+
+[dependencies]
+adex-core = { path = "../adex-core" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+
+# GUI (optional for now — we start with a solid CLI + later expand)
+eframe = { version = "0.31", optional = true }
+egui = { version = "0.31", optional = true }
+
+[features]
+default = ["gui"]
+gui = ["dep:eframe", "dep:egui"]
