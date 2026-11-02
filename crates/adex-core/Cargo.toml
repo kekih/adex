@@ -15,14 +15,8 @@ bytes = { workspace = true }
 serde = { workspace = true }
 bitflags = { workspace = true }
 bytemuck = { workspace = true }
-
-# Pure-Rust ADB client (preferred)
-rsadb = { version = "0.1", optional = true }
-
-# Fallback / helpers
-which = "7"
+which = "6"
 
 [features]
 default = ["system-adb"]
 system-adb = []
-pure-adb = ["dep:rsadb"]

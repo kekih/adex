@@ -1,10 +1,4 @@
 //! Adex Core — high-performance Android mirroring foundation.
-//!
-//! Provides:
-//! - Device discovery and ADB management
-//! - scrcpy-server lifecycle
-//! - Scrcpy wire protocol (video + control)
-//! - Session orchestration
 
 pub mod adb;
 pub mod scrcpy;
@@ -12,8 +6,8 @@ pub mod session;
 pub mod util;
 
 pub use adb::{AdbClient, Device, DeviceState};
-pub use session::{Session, SessionConfig, SessionEvent};
 pub use scrcpy::protocol::{ControlMessage, VideoPacket};
+pub use session::{Session, SessionConfig, SessionEvent};
 
 pub type Result<T> = std::result::Result<T, Error>;
 

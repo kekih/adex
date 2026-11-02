@@ -2,7 +2,7 @@
 
 use crate::theme;
 use adex_core::adb::{AdbClient, Device};
-use egui::{self, Align, Color32, Frame, Layout, RichText, Sense, Ui, Vec2};
+use egui::{self, Align, Color32, CornerRadius, Frame, Layout, RichText, Sense, Ui, Vec2};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -30,6 +30,8 @@ pub struct AdexApp {
     connected: bool,
     mirror_title: String,
     show_sidebar: bool,
+    frame_count: u64,
+    last_pts: u64,
 }
 
 impl AdexApp {
@@ -42,28 +44,28 @@ impl AdexApp {
             error: None,
         }));
 
-        // Background refresh of devices
         let cache_clone = cache.clone();
         std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().ok();
+            let rt = match tokio::runtime::Runtime::new() {
+                Ok(r) => r,
+                Err(_) => return,
+            };
             loop {
-                if let Some(rt) = &rt {
-                    let result = rt.block_on(async {
-                        match AdbClient::new() {
-                            Ok(adb) => adb.devices().await.map_err(|e| e.to_string()),
-                            Err(e) => Err(e.to_string()),
-                        }
-                    });
-                    if let Ok(mut guard) = cache_clone.lock() {
-                        match result {
-                            Ok(devs) => {
-                                guard.devices = devs;
-                                guard.error = None;
-                            }
-                            Err(e) => guard.error = Some(e),
-                        }
-                        guard.last_refresh = Instant::now();
+                let result = rt.block_on(async {
+                    match AdbClient::new() {
+                        Ok(adb) => adb.devices().await.map_err(|e| e.to_string()),
+                        Err(e) => Err(e.to_string()),
                     }
+                });
+                if let Ok(mut guard) = cache_clone.lock() {
+                    match result {
+                        Ok(devs) => {
+                            guard.devices = devs;
+                            guard.error = None;
+                        }
+                        Err(e) => guard.error = Some(e),
+                    }
+                    guard.last_refresh = Instant::now();
                 }
                 std::thread::sleep(Duration::from_secs(3));
             }
@@ -77,6 +79,8 @@ impl AdexApp {
             connected: false,
             mirror_title: "No active session".into(),
             show_sidebar: true,
+            frame_count: 0,
+            last_pts: 0,
         }
     }
 
@@ -96,11 +100,10 @@ impl eframe::App for AdexApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.request_repaint_after(Duration::from_millis(500));
 
-        // Top status bar
         egui::TopBottomPanel::top("top_bar")
             .exact_height(44.0)
             .frame(
-                Frame::none()
+                Frame::new()
                     .fill(theme::BG_PANEL)
                     .stroke(egui::Stroke::new(1.0, theme::BORDER)),
             )
@@ -114,7 +117,7 @@ impl eframe::App for AdexApp {
                             .color(theme::ACCENT_SOFT),
                     );
                     ui.add_space(8.0);
-                    ui.label(RichText::new("•").color(theme::TEXT_DIM));
+                    ui.label(RichText::new("·").color(theme::TEXT_DIM));
                     ui.label(
                         RichText::new("Android Desktop Experience")
                             .size(13.0)
@@ -123,7 +126,6 @@ impl eframe::App for AdexApp {
 
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         ui.add_space(12.0);
-
                         let (dot, label) = if self.connected {
                             (theme::SUCCESS, "Connected")
                         } else {
@@ -131,7 +133,6 @@ impl eframe::App for AdexApp {
                         };
                         ui.label(RichText::new(label).size(12.0).color(theme::TEXT_DIM));
                         ui.colored_label(dot, "●");
-
                         ui.add_space(16.0);
                         ui.label(
                             RichText::new(&self.status_message)
@@ -142,19 +143,18 @@ impl eframe::App for AdexApp {
                 });
             });
 
-        // Left sidebar
         if self.show_sidebar {
             egui::SidePanel::left("sidebar")
                 .exact_width(200.0)
-                .frame(Frame::none().fill(theme::BG_PANEL))
+                .frame(Frame::new().fill(theme::BG_PANEL))
                 .show(ctx, |ui| {
                     ui.add_space(12.0);
-                    self.nav_button(ui, NavItem::Home, "⌂  Home");
-                    self.nav_button(ui, NavItem::Devices, "📱  Devices");
-                    self.nav_button(ui, NavItem::Mirror, "🖥  Mirror");
-                    self.nav_button(ui, NavItem::Apps, "▣  Apps");
-                    self.nav_button(ui, NavItem::Media, "♪  Media");
-                    self.nav_button(ui, NavItem::Settings, "⚙  Settings");
+                    self.nav_button(ui, NavItem::Home, "Home");
+                    self.nav_button(ui, NavItem::Devices, "Devices");
+                    self.nav_button(ui, NavItem::Mirror, "Mirror");
+                    self.nav_button(ui, NavItem::Apps, "Apps");
+                    self.nav_button(ui, NavItem::Media, "Media");
+                    self.nav_button(ui, NavItem::Settings, "Settings");
 
                     ui.with_layout(Layout::bottom_up(Align::LEFT), |ui| {
                         ui.add_space(12.0);
@@ -168,9 +168,8 @@ impl eframe::App for AdexApp {
                 });
         }
 
-        // Central content
         egui::CentralPanel::default()
-            .frame(Frame::none().fill(theme::BG_DARK).inner_margin(16.0))
+            .frame(Frame::new().fill(theme::BG_DARK).inner_margin(16.0))
             .show(ctx, |ui| match self.nav {
                 NavItem::Home => self.ui_home(ui),
                 NavItem::Devices => self.ui_devices(ui),
@@ -200,7 +199,7 @@ impl AdexApp {
             egui::Button::new(RichText::new(label).size(14.0).color(text_color))
                 .fill(fill)
                 .min_size(Vec2::new(176.0, 36.0))
-                .rounding(8.0),
+                .corner_radius(CornerRadius::same(8)),
         );
         if resp.clicked() {
             self.nav = item;
@@ -236,7 +235,7 @@ impl AdexApp {
                 "Mirror status",
             );
             ui.add_space(12.0);
-            self.card(ui, "Latency", "—", "Target < 30 ms");
+            self.card(ui, "Frames", &format!("{}", self.frame_count), "Received");
         });
 
         ui.add_space(28.0);
@@ -254,7 +253,7 @@ impl AdexApp {
                 .add(
                     egui::Button::new(RichText::new("Open Devices").color(Color32::WHITE))
                         .fill(theme::ACCENT)
-                        .rounding(8.0)
+                        .corner_radius(CornerRadius::same(8))
                         .min_size(Vec2::new(140.0, 34.0)),
                 )
                 .clicked()
@@ -265,9 +264,9 @@ impl AdexApp {
     }
 
     fn card(&self, ui: &mut Ui, title: &str, value: &str, subtitle: &str) {
-        Frame::none()
+        Frame::new()
             .fill(theme::BG_CARD)
-            .rounding(12.0)
+            .corner_radius(CornerRadius::same(12))
             .inner_margin(16.0)
             .stroke(egui::Stroke::new(1.0, theme::BORDER))
             .show(ui, |ui| {
@@ -296,7 +295,7 @@ impl AdexApp {
         if let Some(err) = self.adb_error() {
             ui.colored_label(theme::ERROR, format!("ADB error: {err}"));
             ui.add_space(8.0);
-            ui.label("Make sure platform-tools are installed and `adb` is in PATH.");
+            ui.label("Make sure platform-tools are installed and adb is in PATH.");
             return;
         }
 
@@ -313,13 +312,13 @@ impl AdexApp {
             let selected = self.selected_serial.as_deref() == Some(&d.serial);
             let ready = d.state.is_ready();
 
-            Frame::none()
+            Frame::new()
                 .fill(if selected {
                     theme::ACCENT.linear_multiply(0.18)
                 } else {
                     theme::BG_CARD
                 })
-                .rounding(10.0)
+                .corner_radius(CornerRadius::same(10))
                 .inner_margin(14.0)
                 .stroke(egui::Stroke::new(
                     1.0,
@@ -352,7 +351,11 @@ impl AdexApp {
                             };
                             ui.colored_label(state_color, format!("{:?}", d.state));
                             if ui
-                                .add_enabled(ready, egui::Button::new("Select").rounding(6.0))
+                                .add_enabled(
+                                    ready,
+                                    egui::Button::new("Select")
+                                        .corner_radius(CornerRadius::same(6)),
+                                )
                                 .clicked()
                             {
                                 self.selected_serial = Some(d.serial.clone());
@@ -383,19 +386,21 @@ impl AdexApp {
                 .add(
                     egui::Button::new(RichText::new("Start Session").color(Color32::WHITE))
                         .fill(theme::ACCENT)
-                        .rounding(8.0)
+                        .corner_radius(CornerRadius::same(8))
                         .min_size(Vec2::new(130.0, 34.0)),
                 )
                 .clicked()
             {
                 self.connected = true;
                 self.mirror_title = format!("Mirroring {}", selected.as_ref().unwrap());
-                self.status_message = "Session starting… (video pipeline coming next)".into();
+                self.status_message =
+                    "Session ready — place scrcpy-server and use CLI mirror for full stream".into();
+                self.frame_count = 0;
             }
             if ui
                 .add(
                     egui::Button::new("Stop")
-                        .rounding(8.0)
+                        .corner_radius(CornerRadius::same(8))
                         .min_size(Vec2::new(80.0, 34.0)),
                 )
                 .clicked()
@@ -408,9 +413,9 @@ impl AdexApp {
 
         ui.add_space(16.0);
 
-        Frame::none()
+        Frame::new()
             .fill(Color32::from_rgb(12, 12, 16))
-            .rounding(12.0)
+            .corner_radius(CornerRadius::same(12))
             .stroke(egui::Stroke::new(1.0, theme::BORDER))
             .inner_margin(0.0)
             .show(ui, |ui| {
@@ -420,12 +425,12 @@ impl AdexApp {
                 let (rect, _resp) = ui.allocate_exact_size(size, Sense::hover());
 
                 ui.painter()
-                    .rect_filled(rect, 12.0, Color32::from_rgb(12, 12, 16));
+                    .rect_filled(rect, CornerRadius::same(12), Color32::from_rgb(12, 12, 16));
 
                 let text = if self.connected {
                     format!(
-                        "{}\n\nVideo surface ready\nH.264 decode + render next",
-                        self.mirror_title
+                        "{}\n\nFrames: {}\nPTS: {}\n\nUse: adex mirror --server scrcpy-server\nfor live H.264 stream (decode next)",
+                        self.mirror_title, self.frame_count, self.last_pts
                     )
                 } else {
                     "Mirror surface\n\nStart a session to begin streaming".into()
@@ -434,7 +439,7 @@ impl AdexApp {
                     rect.center(),
                     egui::Align2::CENTER_CENTER,
                     text,
-                    egui::FontId::proportional(16.0),
+                    egui::FontId::proportional(15.0),
                     theme::TEXT_DIM,
                 );
             });
@@ -451,14 +456,14 @@ impl AdexApp {
 
         ui.horizontal_wrapped(|ui| {
             for name in ["Chrome", "YouTube", "Settings", "Gallery", "Messages", "Camera"] {
-                Frame::none()
+                Frame::new()
                     .fill(theme::BG_CARD)
-                    .rounding(12.0)
+                    .corner_radius(CornerRadius::same(12))
                     .inner_margin(12.0)
                     .show(ui, |ui| {
                         ui.set_min_size(Vec2::new(100.0, 90.0));
                         ui.vertical_centered(|ui| {
-                            ui.label(RichText::new("▢").size(28.0).color(theme::ACCENT_SOFT));
+                            ui.label(RichText::new("[App]").size(14.0).color(theme::ACCENT_SOFT));
                             ui.add_space(4.0);
                             ui.label(RichText::new(name).size(12.0));
                         });

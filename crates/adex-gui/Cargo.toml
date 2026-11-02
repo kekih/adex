@@ -19,5 +19,3 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 eframe = "0.31"
 egui = "0.31"
-egui_extras = { version = "0.31", features = ["all_loaders"] }
-image = { version = "0.25", default-features = false, features = ["png"] }

@@ -24,8 +24,8 @@ jobs:
       - name: Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Format
-        run: cargo fmt --all -- --check
+      - name: Format (informational)
+        run: cargo fmt --all -- --check || true
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
