@@ -36,10 +36,6 @@ impl AdexApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         theme::apply(&cc.egui_ctx);
 
-        // Prefer a nice font if available, otherwise default
-        let mut fonts = egui::FontDefinitions::default();
-        cc.egui_ctx.set_fonts(fonts);
-
         let cache = Arc::new(Mutex::new(DeviceCache {
             devices: Vec::new(),
             last_refresh: Instant::now() - Duration::from_secs(60),
@@ -98,16 +94,16 @@ impl AdexApp {
 
 impl eframe::App for AdexApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Request continuous repaint so device list stays fresh
         ctx.request_repaint_after(Duration::from_millis(500));
 
         // Top status bar
         egui::TopBottomPanel::top("top_bar")
             .exact_height(44.0)
-            .frame(Frame::none().fill(theme::BG_PANEL).stroke(egui::Stroke::new(
-                1.0,
-                theme::BORDER,
-            )))
+            .frame(
+                Frame::none()
+                    .fill(theme::BG_PANEL)
+                    .stroke(egui::Stroke::new(1.0, theme::BORDER)),
+            )
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
                     ui.add_space(12.0);
@@ -128,7 +124,6 @@ impl eframe::App for AdexApp {
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         ui.add_space(12.0);
 
-                        // Connection indicator
                         let (dot, label) = if self.connected {
                             (theme::SUCCESS, "Connected")
                         } else {
@@ -147,7 +142,7 @@ impl eframe::App for AdexApp {
                 });
             });
 
-        // Left sidebar (DeX-style navigation)
+        // Left sidebar
         if self.show_sidebar {
             egui::SidePanel::left("sidebar")
                 .exact_width(200.0)
@@ -213,7 +208,11 @@ impl AdexApp {
     }
 
     fn ui_home(&mut self, ui: &mut Ui) {
-        ui.heading(RichText::new("Welcome to Adex").size(26.0).color(theme::TEXT));
+        ui.heading(
+            RichText::new("Welcome to Adex")
+                .size(26.0)
+                .color(theme::TEXT),
+        );
         ui.add_space(4.0);
         ui.label(
             RichText::new("Turn your Android phone into a desktop experience.")
@@ -222,9 +221,13 @@ impl AdexApp {
         );
         ui.add_space(24.0);
 
-        // Quick cards
         ui.horizontal(|ui| {
-            self.card(ui, "Devices", &format!("{}", self.devices().len()), "Connected phones");
+            self.card(
+                ui,
+                "Devices",
+                &format!("{}", self.devices().len()),
+                "Connected phones",
+            );
             ui.add_space(12.0);
             self.card(
                 ui,
@@ -349,15 +352,11 @@ impl AdexApp {
                             };
                             ui.colored_label(state_color, format!("{:?}", d.state));
                             if ui
-                                .add_enabled(
-                                    ready,
-                                    egui::Button::new("Select").rounding(6.0),
-                                )
+                                .add_enabled(ready, egui::Button::new("Select").rounding(6.0))
                                 .clicked()
                             {
                                 self.selected_serial = Some(d.serial.clone());
-                                self.status_message =
-                                    format!("Selected {}", d.display_name());
+                                self.status_message = format!("Selected {}", d.display_name());
                             }
                         });
                     });
@@ -409,7 +408,6 @@ impl AdexApp {
 
         ui.add_space(16.0);
 
-        // Placeholder mirror surface — later this will be a wgpu texture
         Frame::none()
             .fill(Color32::from_rgb(12, 12, 16))
             .rounding(12.0)
@@ -417,16 +415,18 @@ impl AdexApp {
             .inner_margin(0.0)
             .show(ui, |ui| {
                 let avail = ui.available_size();
-                let size = Vec2::new(avail.x.max(400.0), (avail.x * 9.0 / 16.0).min(avail.y - 20.0));
+                let size =
+                    Vec2::new(avail.x.max(400.0), (avail.x * 9.0 / 16.0).min(avail.y - 20.0));
                 let (rect, _resp) = ui.allocate_exact_size(size, Sense::hover());
 
-                ui.painter().rect_filled(rect, 12.0, Color32::from_rgb(12, 12, 16));
+                ui.painter()
+                    .rect_filled(rect, 12.0, Color32::from_rgb(12, 12, 16));
 
                 let text = if self.connected {
-                    format!("{}
-
-Video surface ready
-H.264 decode + render next", self.mirror_title)
+                    format!(
+                        "{}\n\nVideo surface ready\nH.264 decode + render next",
+                        self.mirror_title
+                    )
                 } else {
                     "Mirror surface\n\nStart a session to begin streaming".into()
                 };
@@ -449,7 +449,6 @@ H.264 decode + render next", self.mirror_title)
         );
         ui.add_space(16.0);
 
-        // Fake app grid as visual placeholder
         ui.horizontal_wrapped(|ui| {
             for name in ["Chrome", "YouTube", "Settings", "Gallery", "Messages", "Camera"] {
                 Frame::none()

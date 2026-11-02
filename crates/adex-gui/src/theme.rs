@@ -1,6 +1,6 @@
 //! Visual theme inspired by modern desktop / Android DeX style.
 
-use egui::{Color32, Rounding, Stroke, Style, Visuals};
+use egui::{Color32, Rounding, Stroke, Visuals};
 
 pub const BG_DARK: Color32 = Color32::from_rgb(18, 18, 24);
 pub const BG_PANEL: Color32 = Color32::from_rgb(28, 28, 36);
