@@ -5,7 +5,6 @@ use crate::scrcpy::{ControlMessage, ScrcpyServer, VideoPacket};
 use crate::{Error, Result};
 use bytes::BytesMut;
 use std::path::PathBuf;
-use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
@@ -51,7 +50,10 @@ pub struct Session {
 }
 
 impl Session {
-    pub async fn connect(device: Device, config: SessionConfig) -> Result<(Self, mpsc::Receiver<SessionEvent>)> {
+    pub async fn connect(
+        device: Device,
+        config: SessionConfig,
+    ) -> Result<(Self, mpsc::Receiver<SessionEvent>)> {
         let adb = AdbClient::new()?;
         let server = ScrcpyServer::new(adb.clone(), device.serial.clone());
 
@@ -77,7 +79,8 @@ impl Session {
             .await
             .map_err(|e| Error::Protocol(format!("handshake failed: {e}")))?;
 
-        let meta = crate::scrcpy::protocol::DeviceMeta::decode(bytes::Bytes::copy_from_slice(&meta_buf))?;
+        let meta =
+            crate::scrcpy::protocol::DeviceMeta::decode(bytes::Bytes::copy_from_slice(&meta_buf))?;
         info!(
             device = %meta.device_name,
             width = meta.width,
@@ -109,7 +112,8 @@ impl Session {
                     break;
                 }
 
-                let size = u32::from_be_bytes([header[8], header[9], header[10], header[11]]) as usize;
+                let size =
+                    u32::from_be_bytes([header[8], header[9], header[10], header[11]]) as usize;
                 let mut payload = vec![0u8; size];
                 if let Err(e) = reader.read_exact(&mut payload).await {
                     let _ = event_tx2

@@ -33,42 +33,39 @@ impl ScrcpyServer {
 
         info!(path = %local_jar.display(), "pushing scrcpy server");
         self.adb
-            .push(&self.serial, &local_jar.to_string_lossy(), SERVER_DEVICE_PATH)
+            .push(
+                &self.serial,
+                &local_jar.to_string_lossy(),
+                SERVER_DEVICE_PATH,
+            )
             .await?;
         Ok(())
     }
 
     /// Build the command line that starts the server.
-    ///
-    /// The server listens on a local abstract socket that we later forward.
     pub fn build_start_command(
         &self,
         max_size: u32,
         bit_rate: u32,
         max_fps: u32,
-        tunnel_forward: bool,
+        _tunnel_forward: bool,
     ) -> String {
-        // scrcpy-server options (version-dependent, kept compatible with recent servers)
-        let mut args = vec![
+        let args = [
             format!("CLASSPATH={SERVER_DEVICE_PATH}"),
             "app_process".into(),
             "/".into(),
             "com.genymobile.scrcpy.Server".into(),
-            "3.3.3".into(), // version string expected by many servers
-            format!("log_level=info"),
+            "3.3.3".into(),
+            "log_level=info".into(),
             format!("max_size={max_size}"),
             format!("bit_rate={bit_rate}"),
             format!("max_fps={max_fps}"),
             "tunnel_forward=true".into(),
             "send_frame_meta=true".into(),
             "control=true".into(),
-            "audio=false".into(), // audio later
+            "audio=false".into(),
             "video=true".into(),
         ];
-
-        if tunnel_forward {
-            // already set above
-        }
 
         args.join(" ")
     }

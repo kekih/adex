@@ -17,11 +17,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
-
-# GUI (optional for now — we start with a solid CLI + later expand)
-eframe = { version = "0.31", optional = true }
-egui = { version = "0.31", optional = true }
-
-[features]
-default = ["gui"]
-gui = ["dep:eframe", "dep:egui"]
+eframe = "0.31"
+egui = "0.31"
+egui_extras = { version = "0.31", features = ["all_loaders"] }
+image = { version = "0.25", default-features = false, features = ["png"] }

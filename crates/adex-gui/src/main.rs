@@ -1,17 +1,21 @@
-use adex_core::adb::AdbClient;
-use adex_core::session::{Session, SessionConfig, SessionEvent};
-use adex_core::Device;
-use anyhow::{bail, Context, Result};
+mod app;
+mod theme;
+
+use app::AdexApp;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
-use tracing::{info, Level};
+use tracing::Level;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
-#[command(name = "adex", version, about = "High-performance Android mirroring in pure Rust")]
+#[command(
+    name = "adex",
+    version,
+    about = "High-performance Android mirroring in pure Rust"
+)]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 
     /// Path to adb binary (default: search PATH)
     #[arg(long, global = true)]
@@ -24,10 +28,10 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// List connected devices
+    /// List connected devices (CLI)
     Devices,
 
-    /// Start a mirroring session
+    /// Start a mirroring session in CLI mode
     Mirror {
         /// Device serial (optional — uses first ready device)
         serial: Option<String>,
@@ -53,8 +57,7 @@ enum Commands {
     Info,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> eframe::Result<()> {
     let cli = Cli::parse();
 
     let level = match cli.verbose {
@@ -71,86 +74,124 @@ async fn main() -> Result<()> {
         )
         .init();
 
-    match cli.command {
-        Commands::Devices => cmd_devices(cli.adb).await,
-        Commands::Mirror {
-            serial,
-            max_size,
-            bit_rate,
-            max_fps,
-            server,
-        } => {
-            cmd_mirror(cli.adb, serial, max_size, bit_rate, max_fps, server).await
-        }
-        Commands::Info => {
-            println!("adex {}", env!("CARGO_PKG_VERSION"));
-            println!("A high-performance Android desktop experience written in Rust.");
-            println!("Repository: https://github.com/kekih/adex");
+    // If a subcommand is given → pure CLI mode
+    if let Some(cmd) = cli.command {
+        let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+        return rt.block_on(async {
+            match cmd {
+                Commands::Devices => {
+                    cli_devices(cli.adb).await;
+                }
+                Commands::Mirror {
+                    serial,
+                    max_size,
+                    bit_rate,
+                    max_fps,
+                    server,
+                } => {
+                    cli_mirror(cli.adb, serial, max_size, bit_rate, max_fps, server).await;
+                }
+                Commands::Info => {
+                    println!("adex {}", env!("CARGO_PKG_VERSION"));
+                    println!("A high-performance Android desktop experience written in Rust.");
+                    println!("Repository: https://github.com/kekih/adex");
+                }
+            }
             Ok(())
-        }
+        });
     }
-}
 
-async fn cmd_devices(adb_path: Option<PathBuf>) -> Result<()> {
-    let adb = match adb_path {
-        Some(p) => AdbClient::with_path(p),
-        None => AdbClient::new().context("adb not found")?,
+    // Default: launch the desktop GUI
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1280.0, 800.0])
+            .with_min_inner_size([900.0, 600.0])
+            .with_title("Adex — Android Desktop Experience"),
+        ..Default::default()
     };
 
-    let devices = adb.devices().await.context("failed to list devices")?;
-
-    if devices.is_empty() {
-        println!("No devices found.");
-        return Ok(());
-    }
-
-    println!("{:<24} {:<14} {}", "SERIAL", "STATE", "MODEL");
-    println!("{:-<24} {:-<14} {:-<20}", "", "", "");
-    for d in devices {
-        println!(
-            "{:<24} {:<14} {}",
-            d.serial,
-            format!("{:?}", d.state),
-            d.display_name()
-        );
-    }
-    Ok(())
+    eframe::run_native(
+        "Adex",
+        options,
+        Box::new(|cc| Ok(Box::new(AdexApp::new(cc)))),
+    )
 }
 
-async fn cmd_mirror(
+async fn cli_devices(adb_path: Option<PathBuf>) {
+    use adex_core::adb::AdbClient;
+    let adb = match adb_path {
+        Some(p) => AdbClient::with_path(p),
+        None => match AdbClient::new() {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("{e}");
+                return;
+            }
+        },
+    };
+
+    match adb.devices().await {
+        Ok(devices) if devices.is_empty() => println!("No devices found."),
+        Ok(devices) => {
+            println!("{:<24} {:<14} {}", "SERIAL", "STATE", "MODEL");
+            println!("{:-<24} {:-<14} {:-<20}", "", "", "");
+            for d in devices {
+                println!(
+                    "{:<24} {:<14} {}",
+                    d.serial,
+                    format!("{:?}", d.state),
+                    d.display_name()
+                );
+            }
+        }
+        Err(e) => eprintln!("Error: {e}"),
+    }
+}
+
+async fn cli_mirror(
     adb_path: Option<PathBuf>,
     serial: Option<String>,
     max_size: u32,
     bit_rate: u32,
     max_fps: u32,
     server: PathBuf,
-) -> Result<()> {
+) {
+    use adex_core::adb::AdbClient;
+    use adex_core::session::{Session, SessionConfig, SessionEvent};
+
     let adb = match adb_path {
         Some(p) => AdbClient::with_path(p),
-        None => AdbClient::new().context("adb not found")?,
+        None => match AdbClient::new() {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("{e}");
+                return;
+            }
+        },
     };
 
-    let devices = adb.devices().await?;
+    let devices = match adb.devices().await {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("{e}");
+            return;
+        }
+    };
+
     let device = match serial {
-        Some(s) => devices
-            .into_iter()
-            .find(|d| d.serial == s)
-            .ok_or_else(|| anyhow::anyhow!("device {s} not found"))?,
-        None => devices
-            .into_iter()
-            .find(|d| d.state.is_ready())
-            .ok_or_else(|| anyhow::anyhow!("no ready device found"))?,
+        Some(s) => devices.into_iter().find(|d| d.serial == s),
+        None => devices.into_iter().find(|d| d.state.is_ready()),
+    };
+
+    let Some(device) = device else {
+        eprintln!("No suitable device found");
+        return;
     };
 
     if !device.state.is_ready() {
-        bail!("device {} is not ready (state: {:?})", device.serial, device.state);
+        eprintln!("Device {} is not ready", device.serial);
+        return;
     }
-
-    info!(
-        serial = %device.serial,
-        model = %device.display_name(),
-        "starting mirror session"
-    );
 
     let config = SessionConfig {
         max_size,
@@ -159,41 +200,32 @@ async fn cmd_mirror(
         server_jar: server,
     };
 
-    let (session, mut events) = Session::connect(device, config).await?;
-
-    println!("Session started for {}", session.device().display_name());
-    println!("Press Ctrl+C to stop.");
-
-    while let Some(ev) = events.recv().await {
-        match ev {
-            SessionEvent::Connected {
-                device_name,
-                width,
-                height,
-            } => {
-                println!("Connected to {device_name} ({width}x{height})");
-            }
-            SessionEvent::Video(pkt) => {
-                // In CLI mode we just log keyframes for now.
-                // Full decode + render lives in the GUI path.
-                if pkt.is_keyframe {
-                    tracing::debug!(
-                        pts = pkt.pts,
-                        size = pkt.data.len(),
-                        "keyframe"
-                    );
+    match Session::connect(device, config).await {
+        Ok((session, mut events)) => {
+            println!("Session started for {}", session.device().display_name());
+            println!("Press Ctrl+C to stop.");
+            while let Some(ev) = events.recv().await {
+                match ev {
+                    SessionEvent::Connected {
+                        device_name,
+                        width,
+                        height,
+                    } => println!("Connected to {device_name} ({width}x{height})"),
+                    SessionEvent::Video(pkt) if pkt.is_keyframe => {
+                        tracing::debug!(pts = pkt.pts, size = pkt.data.len(), "keyframe");
+                    }
+                    SessionEvent::Disconnected => {
+                        println!("Disconnected.");
+                        break;
+                    }
+                    SessionEvent::Error(e) => {
+                        eprintln!("Error: {e}");
+                        break;
+                    }
+                    _ => {}
                 }
             }
-            SessionEvent::Disconnected => {
-                println!("Disconnected.");
-                break;
-            }
-            SessionEvent::Error(e) => {
-                eprintln!("Error: {e}");
-                break;
-            }
         }
+        Err(e) => eprintln!("Failed to start session: {e}"),
     }
-
-    Ok(())
 }

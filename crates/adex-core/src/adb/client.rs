@@ -3,7 +3,7 @@ use crate::{Error, Result};
 use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::process::Command;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 /// Thin async wrapper around the system `adb` binary.
 /// Later we can swap the backend for pure-Rust `rsadb`.
@@ -16,8 +16,7 @@ impl AdbClient {
     pub fn new() -> Result<Self> {
         let path = which::which("adb").map_err(|_| {
             Error::Adb(
-                "adb not found in PATH. Install Android platform-tools or set ADB path."
-                    .into(),
+                "adb not found in PATH. Install Android platform-tools or set ADB path.".into(),
             )
         })?;
         Ok(Self { adb_path: path })
@@ -59,8 +58,12 @@ impl AdbClient {
             }
 
             let mut parts = line.split_whitespace();
-            let Some(serial) = parts.next() else { continue };
-            let Some(state_str) = parts.next() else { continue };
+            let Some(serial) = parts.next() else {
+                continue;
+            };
+            let Some(state_str) = parts.next() else {
+                continue;
+            };
 
             let mut product = None;
             let mut model = None;
@@ -110,9 +113,7 @@ impl AdbClient {
     }
 
     pub async fn shell(&self, serial: &str, cmd: &str) -> Result<String> {
-        let (status, stdout, stderr) = self
-            .run(&["-s", serial, "shell", cmd])
-            .await?;
+        let (status, stdout, stderr) = self.run(&["-s", serial, "shell", cmd]).await?;
         if status != 0 {
             return Err(Error::Adb(format!("shell failed: {stderr}")));
         }
@@ -120,9 +121,7 @@ impl AdbClient {
     }
 
     pub async fn push(&self, serial: &str, local: &str, remote: &str) -> Result<()> {
-        let (status, _, stderr) = self
-            .run(&["-s", serial, "push", local, remote])
-            .await?;
+        let (status, _, stderr) = self.run(&["-s", serial, "push", local, remote]).await?;
         if status != 0 {
             return Err(Error::Adb(format!("push failed: {stderr}")));
         }
@@ -150,16 +149,14 @@ impl AdbClient {
     }
 
     pub async fn remove_forward(&self, serial: &str, local: &str) -> Result<()> {
-        let _ = self.run(&["-s", serial, "forward", "--remove", local]).await?;
+        let _ = self
+            .run(&["-s", serial, "forward", "--remove", local])
+            .await?;
         Ok(())
     }
 
     /// Start a long-running process (used for scrcpy-server).
-    pub async fn shell_exec(
-        &self,
-        serial: &str,
-        cmd: &str,
-    ) -> Result<tokio::process::Child> {
+    pub async fn shell_exec(&self, serial: &str, cmd: &str) -> Result<tokio::process::Child> {
         info!(%serial, %cmd, "starting shell process");
         let child = Command::new(&self.adb_path)
             .args(["-s", serial, "shell", cmd])
