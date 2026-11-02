@@ -36,8 +36,23 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      - name: Package debug binary (always available)
+        run: |
+          mkdir -p dist
+          cp target/debug/adex dist/adex
+          chmod +x dist/adex
+          tar -czf adex-linux-x64-debug.tar.gz -C dist adex
+
+      - name: Upload debug artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: adex-linux-x64-debug
+          path: adex-linux-x64-debug.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
   build:
-    name: Build (${{ matrix.target }})
+    name: Build (${{ matrix.artifact }})
     needs: check
     strategy:
       fail-fast: false
@@ -71,22 +86,32 @@ jobs:
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }} -p adex
 
-      - name: Package
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          mkdir -p dist
-          if [[ "${{ matrix.os }}" == windows-latest ]]; then
-            cp target/${{ matrix.target }}/release/adex.exe dist/
-            cd dist && 7z a ../${{ matrix.artifact }}.zip adex.exe
-          else
-            cp target/${{ matrix.target }}/release/adex dist/
-            cd dist && tar -czf ../${{ matrix.artifact }}.tar.gz adex
-          fi
+          set -euo pipefail
+          BIN="target/${{ matrix.target }}/release/adex"
+          test -f "$BIN"
+          chmod +x "$BIN"
+          tar -czf "${{ matrix.artifact }}.tar.gz" -C "target/${{ matrix.target }}/release" adex
+          ls -lh "${{ matrix.artifact }}.tar.gz"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bin = "target/${{ matrix.target }}/release/adex.exe"
+          if (-not (Test-Path $bin)) { throw "Binary not found: $bin" }
+          Compress-Archive -Path $bin -DestinationPath "${{ matrix.artifact }}.zip" -Force
+          Get-Item "${{ matrix.artifact }}.zip" | Format-List Name, Length
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: |
-            *.tar.gz
-            *.zip
+            ${{ matrix.artifact }}.tar.gz
+            ${{ matrix.artifact }}.zip
+          if-no-files-found: error
+          retention-days: 30

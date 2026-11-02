@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build (${{ matrix.target }})
+    name: Build (${{ matrix.artifact }})
     strategy:
       fail-fast: false
       matrix:
@@ -18,19 +18,19 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact: adex-linux-x64
-            ext: tar.gz
+            archive: tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact: adex-windows-x64
-            ext: zip
+            archive: zip
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact: adex-macos-arm64
-            ext: tar.gz
+            archive: tar.gz
           - os: macos-13
             target: x86_64-apple-darwin
             artifact: adex-macos-x64
-            ext: tar.gz
+            archive: tar.gz
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -47,27 +47,33 @@ jobs:
       - name: Build release
         run: cargo build --release --target ${{ matrix.target }} -p adex
 
-      - name: Package
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          mkdir -p dist
-          if [[ "${{ matrix.os }}" == windows-latest ]]; then
-            cp target/${{ matrix.target }}/release/adex.exe dist/
-            cd dist && 7z a ../${{ matrix.artifact }}.zip adex.exe
-          else
-            cp target/${{ matrix.target }}/release/adex dist/
-            chmod +x dist/adex
-            cd dist && tar -czf ../${{ matrix.artifact }}.tar.gz adex
-          fi
+          set -euo pipefail
+          BIN="target/${{ matrix.target }}/release/adex"
+          test -f "$BIN"
+          chmod +x "$BIN"
+          tar -czf "${{ matrix.artifact }}.tar.gz" -C "target/${{ matrix.target }}/release" adex
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bin = "target/${{ matrix.target }}/release/adex.exe"
+          if (-not (Test-Path $bin)) { throw "Binary not found: $bin" }
+          Compress-Archive -Path $bin -DestinationPath "${{ matrix.artifact }}.zip" -Force
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}.${{ matrix.ext }}
+          path: ${{ matrix.artifact }}.${{ matrix.archive }}
+          if-no-files-found: error
 
   release:
-    name: Create Release
+    name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -77,6 +83,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: List files
+        run: find artifacts -type f -ls
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
